@@ -139,14 +139,16 @@ export default function App() {
 
               <div className="hero-inner">
                 <LogoIcon size={52} white />
-                <div className="hero-badge">Santa Cruz de la Sierra · Bolivia</div>
-                <h1 className="hero-title">
-                  Enfermería profesional<br/>
-                  <span>en tu hogar</span>
-                </h1>
-                <p className="hero-sub">
-                  Enfermeros certificados y verificados en Santa Cruz. Rápido, seguro y con calificaciones reales.
-                </p>
+                <div className="hero-center">
+                  <div className="hero-badge">Santa Cruz de la Sierra · Bolivia</div>
+                  <h1 className="hero-title">
+                    Enfermería profesional<br/>
+                    <span>en tu hogar</span>
+                  </h1>
+                  <p className="hero-sub">
+                    Enfermeros certificados y verificados en Santa Cruz. Rápido, seguro y con calificaciones reales.
+                  </p>
+                </div>
                 <button className="hero-btn" onClick={() => go("search")}>
                   Encontrar un enfermero →
                 </button>
