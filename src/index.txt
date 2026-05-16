@@ -80,6 +80,7 @@ button, input, select, textarea {
   z-index: 1;
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: center;
   height: 100%;
   gap: 0.8rem;
@@ -119,7 +120,7 @@ button, input, select, textarea {
 }
 
 .hero-btn {
-  margin-top: auto;
+  margin-top: auto;   /* mobile: push to bottom */
   background: #2AABB0;
   color: white;
   border: none;
@@ -254,13 +255,19 @@ button, input, select, textarea {
   .nav-wa { font-size: 0.85rem; padding: 0.5rem 1rem; }
 
   .hero {
+    height: auto;
     min-height: calc(100vh - 68px);
     padding: 4rem 2rem;
   }
 
+  .hero-inner {
+    height: auto;     /* desktop: natural height, no push */
+    gap: 1.25rem;
+  }
+
   .hero-title { font-size: 2.8rem; }
   .hero-sub   { font-size: 1.05rem; max-width: 480px; }
-  .hero-btn   { width: auto; padding: 1.1rem 3rem; font-size: 1.1rem; }
+  .hero-btn   { width: auto; padding: 1.1rem 3rem; font-size: 1.1rem; margin-top: 0.5rem; }
 
   .stats-bar {
     display: flex;
