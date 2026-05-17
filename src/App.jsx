@@ -133,23 +133,28 @@ export default function App() {
           <>
             {/* Hero — mobile first: everything above fold */}
             <section className="hero">
-              {/* decorative blobs */}
               <div style={{ position:"absolute", top:"-60px", right:"-60px", width:"220px", height:"220px", borderRadius:"50%", background:"rgba(42,171,176,0.08)", pointerEvents:"none" }}/>
               <div style={{ position:"absolute", bottom:"-40px", left:"-40px", width:"160px", height:"160px", borderRadius:"50%", background:"rgba(42,171,176,0.06)", pointerEvents:"none" }}/>
 
-              <div className="hero-inner">
-                <div className="hero-badge">Santa Cruz de la Sierra · Bolivia</div>
-                <LogoIcon size={56} white />
-                <h1 className="hero-title">
-                  Enfermería profesional<br/>
-                  <span>en tu hogar</span>
-                </h1>
-                <p className="hero-sub">
-                  Enfermeros certificados y verificados en Santa Cruz. Rápido, seguro y con calificaciones reales.
-                </p>
-                <button className="hero-btn" onClick={() => go("search")}>
-                  Encontrar un enfermero →
-                </button>
+              <div className="hero-layout">
+                {/* Text content */}
+                <div className="hero-inner">
+                  <div className="hero-badge">Santa Cruz de la Sierra · Bolivia</div>
+                  <h1 className="hero-title">
+                    Enfermería profesional<br/>
+                    <span>en tu hogar</span>
+                  </h1>
+                  <p className="hero-sub">
+                    Enfermeros certificados y verificados en Santa Cruz. Rápido, seguro y con calificaciones reales.
+                  </p>
+                  <button className="hero-btn" onClick={() => go("search")}>
+                    Encontrar un enfermero →
+                  </button>
+                </div>
+                {/* Nuti mascot */}
+                <div className="hero-nuti">
+                  <img src="/nuti_hero.png" alt="Nuti, mascota de CuidaMed" className="nuti-img" />
+                </div>
               </div>
             </section>
 
