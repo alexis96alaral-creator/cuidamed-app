@@ -148,9 +148,9 @@ button, input, select, textarea { font-family: inherit; }
   .hero-layout {
     flex-direction: row;
     justify-content: center;
-    align-items: flex-end;
+    align-items: center;
     gap: 2rem;
-    padding: 2rem 4rem 0;
+    padding: 2rem 4rem;
     max-width: 1100px;
     margin: 0 auto;
     height: 100%;
@@ -159,11 +159,10 @@ button, input, select, textarea { font-family: inherit; }
     text-align: left;
     align-items: flex-start;
     max-width: 500px;
-    padding-bottom: 3rem;
   }
   .hero-nuti {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     justify-content: center;
     flex-shrink: 0;
   }
