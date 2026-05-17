@@ -137,7 +137,11 @@ export default function App() {
               <div style={{ position:"absolute", bottom:"-40px", left:"-40px", width:"160px", height:"160px", borderRadius:"50%", background:"rgba(42,171,176,0.06)", pointerEvents:"none" }}/>
 
               <div className="hero-layout">
-                {/* Text content */}
+                {/* Nuti mascot — LEFT */}
+                <div className="hero-nuti">
+                  <img src="/nuti_hero.png" alt="Nuti, mascota de CuidaMed" className="nuti-img" />
+                </div>
+                {/* Text content — RIGHT */}
                 <div className="hero-inner">
                   <div className="hero-badge">Santa Cruz de la Sierra · Bolivia</div>
                   <h1 className="hero-title">
@@ -150,10 +154,6 @@ export default function App() {
                   <button className="hero-btn" onClick={() => go("search")}>
                     Encontrar un enfermero →
                   </button>
-                </div>
-                {/* Nuti mascot */}
-                <div className="hero-nuti">
-                  <img src="/nuti_hero.png" alt="Nuti, mascota de CuidaMed" className="nuti-img" />
                 </div>
               </div>
             </section>
