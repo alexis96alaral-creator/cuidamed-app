@@ -77,6 +77,11 @@ function buildDirectWA() {
 
 /* ── App ── */
 export default function App() {
+  // Route to nurse portal
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/enfermero')) {
+    return <EnfermeroPortal />;
+  }
+
   const [page, setPage]               = useState("home");
   const [selectedZone, setZone]       = useState("Todas las zonas");
   const [selectedService, setSvc]     = useState("Todos los servicios");
