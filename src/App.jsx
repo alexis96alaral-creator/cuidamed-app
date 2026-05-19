@@ -1,4 +1,5 @@
 import { useState } from "react";
+import EnfermeroPortal from "./Enfermero.jsx";
 import "./index.css";
 
 const C = {
