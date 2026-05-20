@@ -120,6 +120,7 @@ export default function App() {
           {[["home","Inicio"],["search","Buscar"],["servicios","Servicios"],["about","Quiénes somos"]].map(([p,lbl]) => (
             <span key={p} onClick={() => go(p)} style={{ color: page===p ? C.white : "rgba(255,255,255,0.7)", fontSize:"0.875rem", cursor:"pointer", fontWeight: page===p?"700":"400" }}>{lbl}</span>
           ))}
+          <a href="/enfermero" style={{ color:"rgba(255,255,255,0.7)", fontSize:"0.875rem", cursor:"pointer", textDecoration:"none" }}>Soy Enfermero/a</a>
           <a href={buildDirectWA()} target="_blank" rel="noreferrer" className="nav-wa">
             <WAIcon size={15}/> Contactar
           </a>
@@ -387,6 +388,10 @@ export default function App() {
             <span>{lbl}</span>
           </button>
         ))}
+        <a href="/enfermero" style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"0.6rem 0.25rem", textDecoration:"none", color: C.muted, gap:"0.2rem" }}>
+          <span style={{ fontSize:"1.2rem" }}>👩‍⚕️</span>
+          <span style={{ fontSize:"0.58rem", fontWeight:"700", textTransform:"uppercase", letterSpacing:"0.05em" }}>Soy Enf.</span>
+        </a>
       </nav>
 
       {/* ── FOOTER (desktop) ── */}
