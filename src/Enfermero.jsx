@@ -237,18 +237,23 @@ function Dashboard({ session, onLogout }) {
 
   async function handleSave() {
     setSaving(true);
-    const { ok } = await updateProfile(userId, token, {
+    const payload = {
       nombre_completo: profile.nombre_completo,
       telefono: profile.telefono,
       especialidad: profile.especialidad,
       zona: profile.zona,
-      experiencia_anos: profile.experiencia_anos,
+      experiencia_anos: Number(profile.experiencia_anos) || 0,
       trabajo_actual: profile.trabajo_actual,
       bio: profile.bio,
       disponible: profile.disponible,
-    });
+    };
+    const { ok, data, status } = await updateProfile(userId, token, payload);
     setSaving(false);
-    if (ok) setSaved(true);
+    if (ok) {
+      setSaved(true);
+    } else {
+      alert("Error al guardar: " + JSON.stringify(data) + " (status: " + status + ")");
+    }
   }
 
   async function toggleDisponible() {
