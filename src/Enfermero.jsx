@@ -54,20 +54,40 @@ async function signOut(token) {
 }
 
 async function getProfile(userId, token) {
-  return sbFetch(`/rest/v1/enfermeros?id=eq.${userId}&select=*`, { token });
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/enfermeros?id=eq.${userId}&select=*`, {
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${token}`,
+    },
+  });
+  const data = await res.json();
+  return { data, ok: res.ok };
 }
 
 async function updateProfile(userId, token, data) {
-  return sbFetch(`/rest/v1/enfermeros?id=eq.${userId}`, {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/enfermeros?id=eq.${userId}`, {
     method: "PATCH",
-    token,
-    headers: { "Prefer": "return=representation" },
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${token}`,
+      "Prefer": "return=representation",
+    },
     body: JSON.stringify(data),
   });
+  const result = await res.json();
+  return { data: result, ok: res.ok, status: res.status };
 }
 
 async function getServicios(enfermeroId, token) {
-  return sbFetch(`/rest/v1/servicios?enfermero_id=eq.${enfermeroId}&order=created_at.desc&select=*`, { token });
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/servicios?enfermero_id=eq.${enfermeroId}&order=created_at.desc&select=*`, {
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${token}`,
+    },
+  });
+  const data = await res.json();
+  return { data, ok: res.ok };
 }
 
 /* ── Icons ── */
