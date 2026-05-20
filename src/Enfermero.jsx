@@ -113,6 +113,41 @@ function LogoIcon({ size = 28, white = true }) {
   );
 }
 
+/* ── Email notification ── */
+async function notificarAdmin(profile) {
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer re_hZTH9je1_2gaqGBjSpchDoM8WdkftcHaU",
+      },
+      body: JSON.stringify({
+        from: "CuidaMed <onboarding@resend.dev>",
+        to: "alexis96alaral@gmail.com",
+        subject: `🏥 CuidaMed: ${profile.nombre_completo || "Enfermero"} actualizó su perfil`,
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #C8DDE0;border-radius:12px">
+          <h2 style="color:#1B3A5C">🏥 CuidaMed — Actualización de perfil</h2>
+          <table style="width:100%;border-collapse:collapse">
+            <tr><td style="padding:8px;color:#6B7E8F;width:40%">Nombre</td><td style="padding:8px;font-weight:bold">${profile.nombre_completo||"—"}</td></tr>
+            <tr style="background:#F4F8F9"><td style="padding:8px;color:#6B7E8F">Especialidad</td><td style="padding:8px">${profile.especialidad||"—"}</td></tr>
+            <tr><td style="padding:8px;color:#6B7E8F">Zona</td><td style="padding:8px">${profile.zona||"—"}</td></tr>
+            <tr style="background:#F4F8F9"><td style="padding:8px;color:#6B7E8F">Teléfono</td><td style="padding:8px">${profile.telefono||"—"}</td></tr>
+            <tr><td style="padding:8px;color:#6B7E8F">Trabajo actual</td><td style="padding:8px">${profile.trabajo_actual||"—"}</td></tr>
+            <tr style="background:#F4F8F9"><td style="padding:8px;color:#6B7E8F">Experiencia</td><td style="padding:8px">${profile.experiencia_anos||"—"} años</td></tr>
+            <tr><td style="padding:8px;color:#6B7E8F">Disponible</td><td style="padding:8px">${profile.disponible ? "✅ Sí" : "❌ No"}</td></tr>
+          </table>
+          <div style="margin-top:20px;text-align:center">
+            <a href="https://supabase.com/dashboard/project/jhmlpiimhlhpgvrqwepp/editor" style="background:#2AABB0;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">Ver en Supabase →</a>
+          </div>
+        </div>`,
+      }),
+    });
+  } catch(e) {
+    console.log("Email error:", e);
+  }
+}
+
 /* ── Auth Form ── */
 function AuthForm({ onLogin }) {
   const [mode, setMode] = useState("login");
@@ -251,6 +286,7 @@ function Dashboard({ session, onLogout }) {
     setSaving(false);
     if (ok) {
       setSaved(true);
+      notificarAdmin({ ...profile, ...payload });
     } else {
       alert("Error al guardar: " + JSON.stringify(data) + " (status: " + status + ")");
     }
