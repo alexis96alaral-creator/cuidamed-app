@@ -113,38 +113,37 @@ function LogoIcon({ size = 28, white = true }) {
   );
 }
 
-/* ── Email notification ── */
+/* ── Telegram notification ── */
+const TG_TOKEN = "8663899589:AAFs5FKTSDWXKz4sOj3WpfPLTE5SG0HK_Hg";
+const TG_CHAT  = "8836256012";
+
 async function notificarAdmin(profile) {
   try {
-    await fetch("https://api.resend.com/emails", {
+    const msg = [
+      "🏥 *CuidaMed — Actualización de perfil*",
+      "",
+      `👤 *Nombre:* ${profile.nombre_completo || "—"}`,
+      `🩺 *Especialidad:* ${profile.especialidad || "—"}`,
+      `📍 *Zona:* ${profile.zona || "—"}`,
+      `📱 *Teléfono:* ${profile.telefono || "—"}`,
+      `🏥 *Trabajo actual:* ${profile.trabajo_actual || "—"}`,
+      `⏱️ *Experiencia:* ${profile.experiencia_anos || "—"} años`,
+      `✅ *Disponible:* ${profile.disponible ? "Sí" : "No"}`,
+      "",
+      `🔗 [Ver en Supabase](https://supabase.com/dashboard/project/jhmlpiimhlhpgvrqwepp/editor)`,
+    ].join("\n");
+
+    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer re_hZTH9je1_2gaqGBjSpchDoM8WdkftcHaU",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "CuidaMed <onboarding@resend.dev>",
-        to: "alexis96alaral@gmail.com",
-        subject: `🏥 CuidaMed: ${profile.nombre_completo || "Enfermero"} actualizó su perfil`,
-        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #C8DDE0;border-radius:12px">
-          <h2 style="color:#1B3A5C">🏥 CuidaMed — Actualización de perfil</h2>
-          <table style="width:100%;border-collapse:collapse">
-            <tr><td style="padding:8px;color:#6B7E8F;width:40%">Nombre</td><td style="padding:8px;font-weight:bold">${profile.nombre_completo||"—"}</td></tr>
-            <tr style="background:#F4F8F9"><td style="padding:8px;color:#6B7E8F">Especialidad</td><td style="padding:8px">${profile.especialidad||"—"}</td></tr>
-            <tr><td style="padding:8px;color:#6B7E8F">Zona</td><td style="padding:8px">${profile.zona||"—"}</td></tr>
-            <tr style="background:#F4F8F9"><td style="padding:8px;color:#6B7E8F">Teléfono</td><td style="padding:8px">${profile.telefono||"—"}</td></tr>
-            <tr><td style="padding:8px;color:#6B7E8F">Trabajo actual</td><td style="padding:8px">${profile.trabajo_actual||"—"}</td></tr>
-            <tr style="background:#F4F8F9"><td style="padding:8px;color:#6B7E8F">Experiencia</td><td style="padding:8px">${profile.experiencia_anos||"—"} años</td></tr>
-            <tr><td style="padding:8px;color:#6B7E8F">Disponible</td><td style="padding:8px">${profile.disponible ? "✅ Sí" : "❌ No"}</td></tr>
-          </table>
-          <div style="margin-top:20px;text-align:center">
-            <a href="https://supabase.com/dashboard/project/jhmlpiimhlhpgvrqwepp/editor" style="background:#2AABB0;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">Ver en Supabase →</a>
-          </div>
-        </div>`,
+        chat_id: TG_CHAT,
+        text: msg,
+        parse_mode: "Markdown",
       }),
     });
   } catch(e) {
-    console.log("Email error:", e);
+    console.log("Telegram error:", e);
   }
 }
 
