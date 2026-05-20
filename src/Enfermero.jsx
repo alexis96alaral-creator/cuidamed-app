@@ -119,15 +119,22 @@ const TG_CHAT  = "8836256012";
 
 async function notificarAdmin(profile) {
   try {
+    const cambios = profile._cambios || [];
+    const resumen = cambios.length > 0
+      ? cambios.map(c => `  • *${c.campo}:* ${c.antes || "vacío"} → ${c.despues}`).join("\n")
+      : "  • Sin cambios detectados";
+
     const msg = [
-      "🏥 *CuidaMed — Actualización de perfil*",
+      "🏥 *CuidaMed — Perfil actualizado*",
       "",
-      `👤 *Nombre:* ${profile.nombre_completo || "—"}`,
+      `👤 *Enfermero:* ${profile.nombre_completo || "—"}`,
+      `📱 *Teléfono:* ${profile.telefono || "—"}`,
+      "",
+      "📝 *Campos modificados:*",
+      resumen,
+      "",
       `🩺 *Especialidad:* ${profile.especialidad || "—"}`,
       `📍 *Zona:* ${profile.zona || "—"}`,
-      `📱 *Teléfono:* ${profile.telefono || "—"}`,
-      `🏥 *Trabajo actual:* ${profile.trabajo_actual || "—"}`,
-      `⏱️ *Experiencia:* ${profile.experiencia_anos || "—"} años`,
       `✅ *Disponible:* ${profile.disponible ? "Sí" : "No"}`,
       "",
       `🔗 [Ver en Supabase](https://supabase.com/dashboard/project/jhmlpiimhlhpgvrqwepp/editor)`,
@@ -260,7 +267,7 @@ function Dashboard({ session, onLogout }) {
         getProfile(userId, token),
         getServicios(userId, token),
       ]);
-      if (prof.ok && prof.data[0]) setProfile(prof.data[0]);
+      if (prof.ok && prof.data[0]) setProfile({ ...prof.data[0], _original: { ...prof.data[0] } });
       if (svcs.ok) setServicios(svcs.data);
       setLoadingData(false);
     }
@@ -281,11 +288,24 @@ function Dashboard({ session, onLogout }) {
       bio: profile.bio,
       disponible: profile.disponible,
     };
+
+    // Detect what changed
+    const LABELS = {
+      nombre_completo: "Nombre", telefono: "Teléfono",
+      especialidad: "Especialidad", zona: "Zona",
+      experiencia_anos: "Experiencia", trabajo_actual: "Trabajo actual",
+      bio: "Presentación", disponible: "Disponible",
+    };
+    const cambios = Object.keys(payload)
+      .filter(k => String(payload[k]) !== String(profile._original?.[k] ?? ""))
+      .map(k => ({ campo: LABELS[k] || k, antes: profile._original?.[k], despues: payload[k] }));
+
     const { ok, data, status } = await updateProfile(userId, token, payload);
     setSaving(false);
     if (ok) {
       setSaved(true);
-      notificarAdmin({ ...profile, ...payload });
+      setProfile(p => ({ ...p, _original: { ...payload } }));
+      notificarAdmin({ ...profile, ...payload, _cambios: cambios });
     } else {
       alert("Error al guardar: " + JSON.stringify(data) + " (status: " + status + ")");
     }
