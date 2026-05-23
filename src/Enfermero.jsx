@@ -115,7 +115,7 @@ function LogoIcon({ size = 28, white = true }) {
 
 /* ── Telegram notification ── */
 const TG_TOKEN = "8663899589:AAFs5FKTSDWXKz4sOj3WpfPLTE5SG0HK_Hg";
-const TG_CHAT  = "8836256012";
+const TG_CHAT  = "8651412678";
 
 async function notificarAdmin(profile) {
   try {
