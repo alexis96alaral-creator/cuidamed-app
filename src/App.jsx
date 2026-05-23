@@ -8,7 +8,7 @@ const C = {
   muted: "#6B7E8F", border: "#C8DDE0", accent: "#E8F6F7",
 };
 
-const WA_NUMBER = "59174510892";
+const WA_NUMBER = "59163589689";
 
 const SERVICIOS = [
   { icon: "💉", title: "Inyecciones y sueros",          desc: "Aplicación de inyecciones intramusculares, subcutáneas y endovenosas. Colocación y mantenimiento de catéteres y sueros en domicilio." },
@@ -401,7 +401,7 @@ export default function App() {
           <span style={{ color:C.white, fontWeight:"700" }}>CuidaMed</span>
         </div>
         <a href={buildDirectWA()} target="_blank" rel="noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:"5px", background:"#25D366", color:C.white, borderRadius:"5px", padding:"0.3rem 0.75rem", fontSize:"0.72rem", fontWeight:"700", textDecoration:"none", marginBottom:"0.5rem" }}>
-          <WAIcon size={12}/> +591 74510892
+          <WAIcon size={12}/> +591 63589689
         </a>
         <div>© 2025 CuidaMed · Santa Cruz de la Sierra, Bolivia</div>
       </footer>
