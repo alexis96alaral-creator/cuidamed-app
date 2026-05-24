@@ -1,501 +1,542 @@
 import { useState, useEffect } from "react";
-import EnfermeroPortal from "./Enfermero.jsx";
-import "./index.css";
+
+const SUPABASE_URL = "https://jhmlpiimhlhpgvrqwepp.supabase.co";
+const SUPABASE_KEY = "sb_publishable_yS9NILyxhmUDAdQTisR0tw_zEF-4di0";
 
 const C = {
   navy: "#1B3A5C", teal: "#2AABB0", tealLight: "#3BBFC4", tealDark: "#1D8A8F",
-  bg: "#F4F8F9", bgAlt: "#EAF4F5", white: "#FFFFFF", text: "#1A1A2E",
-  muted: "#6B7E8F", border: "#C8DDE0", accent: "#E8F6F7",
+  bg: "#F4F8F9", white: "#FFFFFF", text: "#1A1A2E", muted: "#6B7E8F",
+  border: "#C8DDE0", accent: "#E8F6F7", green: "#25D366", red: "#E74C3C",
 };
 
-const WA_NUMBER = "59163589689";
-const SB_URL = "https://jhmlpiimhlhpgvrqwepp.supabase.co";
-const SB_KEY = "sb_publishable_yS9NILyxhmUDAdQTisR0tw_zEF-4di0";
-
-async function fetchEnfermeros() {
-  try {
-    const res = await fetch(
-      `${SB_URL}/rest/v1/enfermeros?verificado=eq.true&select=id,nombre_completo,especialidad,zona,experiencia_anos,trabajo_actual,disponible,bio,telefono`,
-      { headers: { "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` } }
-    );
-    const data = await res.json();
-    return data.map((e, i) => ({
-      id: e.id,
-      name: e.nombre_completo || "Enfermero/a",
-      specialty: e.especialidad || "Enfermería general",
-      zone: e.zona || "Santa Cruz",
-      rating: 5.0,
-      reviews: 0,
-      price: 150,
-      available: e.disponible !== false,
-      exp: e.experiencia_anos ? `${e.experiencia_anos} años` : "—",
-      avatar: (e.nombre_completo || "EN").split(" ").map(w => w[0]).slice(0,2).join("").toUpperCase(),
-      color: ["#2AABB0","#1B3A5C","#1D8A8F","#2D6A8A","#1A5276","#117A65"][i % 6],
-      trabajo: e.trabajo_actual || "Independiente",
-    }));
-  } catch(e) {
-    console.error("Error fetching nurses:", e);
-    return [];
-  }
-}
-
-const SERVICIOS = [
-  { icon: "💉", title: "Inyecciones y sueros",          desc: "Aplicación de inyecciones intramusculares, subcutáneas y endovenosas. Colocación y mantenimiento de catéteres y sueros en domicilio." },
-  { icon: "🩹", title: "Curación de heridas",           desc: "Limpieza, desinfección y cambio de vendajes en heridas quirúrgicas, úlceras por presión y lesiones crónicas." },
-  { icon: "📊", title: "Control de signos vitales",     desc: "Medición de presión arterial, temperatura, frecuencia cardíaca, saturación de oxígeno y glucemia. Reporte al médico tratante." },
-  { icon: "💊", title: "Administración de medicamentos", desc: "Suministro correcto y puntual de medicamentos según prescripción médica. Control de dosis y horarios." },
-  { icon: "🛁", title: "Higiene y movilización",        desc: "Baño, aseo personal y cambio de ropa a pacientes encamados. Cambios posturales y apoyo en traslados." },
-  { icon: "👴", title: "Cuidado de adulto mayor",       desc: "Acompañamiento integral: alimentación, medicación, estimulación cognitiva y supervisión continua. Turno diurno o nocturno." },
-  { icon: "👶", title: "Cuidado neonatal y pediátrico", desc: "Atención a recién nacidos y niños: control de peso, nebulizaciones, orientación en lactancia y seguimiento del desarrollo." },
-  { icon: "🏥", title: "Cuidados post-operatorios",     desc: "Recuperación en casa tras cirugías: control de herida, antibióticos, detección de complicaciones." },
-  { icon: "🚗", title: "Acompañamiento hospitalario",   desc: "Enfermero presente durante internaciones, estudios o consultas. Intermediación con el equipo médico." },
+const ESPECIALIDADES = [
+  "Enfermería general", "Cuidado adulto mayor", "Pediatría domiciliaria",
+  "Post-operatorio", "Urgencias domiciliarias", "Cuidados paliativos",
+  "Neonatología", "Enfermedades crónicas",
 ];
 
-// nurses loaded from Supabase dynamically
+const ZONAS = [
+  "Equipetrol", "Norte", "Plan 3000", "Radial 26", "Sirari",
+  "Las Palmas", "Urubo", "Jardín Botánico", "Hamacas", "Villa Primero de Mayo",
+];
 
-const zones    = ["Todas las zonas", "Equipetrol", "Norte", "Plan 3000", "Radial 26"];
-const services = ["Todos los servicios", "Cuidado adulto mayor", "Enfermería general", "Pediatría domiciliaria", "Post-operatorio"];
+/* ── Supabase helpers ── */
+async function sbFetch(path, options = {}) {
+  const res = await fetch(`${SUPABASE_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${options.token || SUPABASE_KEY}`,
+      ...options.headers,
+    },
+  });
+  const data = await res.json();
+  return { data, ok: res.ok, status: res.status };
+}
+
+async function signUp(email, password, nombre) {
+  return sbFetch("/auth/v1/signup", {
+    method: "POST",
+    body: JSON.stringify({ email, password, data: { nombre_completo: nombre } }),
+  });
+}
+
+async function signIn(email, password) {
+  return sbFetch("/auth/v1/token?grant_type=password", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+async function signOut(token) {
+  return sbFetch("/auth/v1/logout", { method: "POST", token });
+}
+
+async function getProfile(userId, token) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/enfermeros?id=eq.${userId}&select=*`, {
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${token}`,
+    },
+  });
+  const data = await res.json();
+  return { data, ok: res.ok };
+}
+
+async function updateProfile(userId, token, data) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/enfermeros?id=eq.${userId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${token}`,
+      "Prefer": "return=representation",
+    },
+    body: JSON.stringify(data),
+  });
+  const result = await res.json();
+  return { data: result, ok: res.ok, status: res.status };
+}
+
+async function getServicios(enfermeroId, token) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/servicios?enfermero_id=eq.${enfermeroId}&order=created_at.desc&select=*`, {
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${token}`,
+    },
+  });
+  const data = await res.json();
+  return { data, ok: res.ok };
+}
 
 /* ── Icons ── */
-function WAIcon({ size = 20, color = "white" }) {
+function Icon({ d, size = 20, color = "currentColor", fill = "none" }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d={d} />
     </svg>
   );
 }
 
-function LogoIcon({ size = 32, white = false }) {
-  const f  = white ? "#FFFFFF" : C.teal;
-  const f2 = white ? "rgba(255,255,255,0.7)" : C.navy;
+function LogoIcon({ size = 28, white = true }) {
+  const f = white ? "#fff" : C.teal;
+  const f2 = white ? "rgba(255,255,255,0.6)" : C.navy;
   return (
     <svg width={size} height={size} viewBox="0 0 60 60" fill="none">
       <circle cx="30" cy="10" r="7" fill={f}/>
       <path d="M10 28C10 18 20 14 30 22C40 14 50 18 50 28C50 40 30 52 30 52C30 52 10 40 10 28Z" fill={f} opacity=".85"/>
       <rect x="24" y="30" width="12" height="10" rx="1" fill={f2} opacity=".9"/>
       <path d="M22 31L30 24L38 31" stroke={f2} strokeWidth="2" fill="none" strokeLinejoin="round"/>
-      <rect x="27.5" y="34" width="5" height="6" rx=".5" fill={white?"rgba(255,255,255,.4)":C.accent}/>
+      <rect x="27.5" y="34" width="5" height="6" rx=".5" fill={white?"rgba(255,255,255,.3)":"#E8F6F7"}/>
     </svg>
   );
 }
 
-function buildWhatsAppURL({ nurse, nombre, telefono, fecha, descripcion }) {
-  const msg = [
-    "🏥 *Nueva solicitud CuidaMed*","",
-    `👤 *Paciente:* ${nombre||"No indicado"}`,
-    `📱 *Teléfono:* ${telefono||"No indicado"}`, "",
-    `🩺 *Enfermero:* ${nurse.name}`,
-    `📋 *Especialidad:* ${nurse.specialty}`,
-    `📍 *Zona:* ${nurse.zone}`,
-    `💰 *Precio:* Bs. ${nurse.price}`, "",
-    `📅 *Fecha:* ${fecha||"A coordinar"}`,
-    `📝 *Descripción:* ${descripcion||"Sin descripción"}`, "",
-    "_Enviado desde alaralcuidamed.com_",
-  ].join("\n");
-  return `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(msg)}`;
-}
+/* ── Telegram notification ── */
+const TG_TOKEN = "8663899589:AAFs5FKTSDWXKz4sOj3WpfPLTE5SG0HK_Hg";
+const TG_CHAT  = "8651412678";
 
-function buildDirectWA() {
-  return `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent("Hola CuidaMed, necesito información sobre sus servicios de enfermería.")}`;
-}
+async function notificarAdmin(profile) {
+  try {
+    const cambios = profile._cambios || [];
+    const resumen = cambios.length > 0
+      ? cambios.map(c => `  • *${c.campo}:* ${c.antes || "vacío"} → ${c.despues}`).join("\n")
+      : "  • Sin cambios detectados";
 
-/* ── App ── */
-export default function App() {
-  // Route to nurse portal
-  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/enfermero')) {
-    return <EnfermeroPortal />;
-  }
+    const msg = [
+      "🏥 *CuidaMed — Perfil actualizado*",
+      "",
+      `👤 *Enfermero:* ${profile.nombre_completo || "—"}`,
+      `📱 *Teléfono:* ${profile.telefono || "—"}`,
+      "",
+      "📝 *Campos modificados:*",
+      resumen,
+      "",
+      `🩺 *Especialidad:* ${profile.especialidad || "—"}`,
+      `📍 *Zona:* ${profile.zona || "—"}`,
+      `✅ *Disponible:* ${profile.disponible ? "Sí" : "No"}`,
+      "",
+      `🔗 [Ver en Supabase](https://supabase.com/dashboard/project/jhmlpiimhlhpgvrqwepp/editor)`,
+    ].join("\n");
 
-  const [page, setPage]               = useState("home");
-  const [selectedZone, setZone]       = useState("Todas las zonas");
-  const [selectedService, setSvc]     = useState("Todos los servicios");
-  const [selectedNurse, setNurse]     = useState(null);
-  const [booked, setBooked]           = useState(false);
-  const [form, setForm]               = useState({ nombre:"", telefono:"", fecha:"", descripcion:"" });
-  const [nurses, setNurses]           = useState([]);
-  const [loadingNurses, setLoadingNurses] = useState(true);
-
-  // Load nurses from Supabase on mount
-  useEffect(() => {
-    fetchEnfermeros().then(data => {
-      setNurses(data);
-      setLoadingNurses(false);
+    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: TG_CHAT,
+        text: msg,
+        parse_mode: "Markdown",
+      }),
     });
-  }, []);
-
-  const filtered = nurses.filter(n =>
-    (selectedZone    === "Todas las zonas"      || n.zone      === selectedZone) &&
-    (selectedService === "Todos los servicios"  || n.specialty === selectedService)
-  );
-
-  function handleConfirmar() {
-    if (!form.nombre || !form.telefono) { alert("Por favor completá tu nombre y teléfono."); return; }
-    window.open(buildWhatsAppURL({ nurse: selectedNurse, ...form }), "_blank");
-    setBooked(true);
+  } catch(e) {
+    console.log("Telegram error:", e);
   }
-
-  function go(p) { setPage(p); window.scrollTo(0,0); }
-
-  return (
-    <div style={{ background: C.bg, minHeight:"100vh", color: C.text }}>
-
-      {/* ── NAV ── */}
-      <nav className="nav">
-        <div className="nav-logo" onClick={() => go("home")}>
-          <LogoIcon size={30} white />
-          <span className="nav-logo-text">
-            <span style={{ color: C.white }}>Cuida</span>
-            <span style={{ color: C.teal  }}>Med</span>
-          </span>
-        </div>
-
-        {/* Desktop links */}
-        <div className="nav-links">
-          {[["home","Inicio"],["search","Buscar"],["servicios","Servicios"],["about","Quiénes somos"]].map(([p,lbl]) => (
-            <span key={p} onClick={() => go(p)} style={{ color: page===p ? C.white : "rgba(255,255,255,0.7)", fontSize:"0.875rem", cursor:"pointer", fontWeight: page===p?"700":"400" }}>{lbl}</span>
-          ))}
-          <a href="/enfermero" style={{ color:"rgba(255,255,255,0.7)", fontSize:"0.875rem", cursor:"pointer", textDecoration:"none" }}>Soy Enfermero/a</a>
-          <a href={buildDirectWA()} target="_blank" rel="noreferrer" className="nav-wa">
-            <WAIcon size={15}/> Contactar
-          </a>
-        </div>
-
-        {/* Mobile: only WA button */}
-        <a href={buildDirectWA()} target="_blank" rel="noreferrer" className="nav-wa" style={{ display:"flex" }}>
-          <WAIcon size={15}/> <span style={{ marginLeft:"4px" }}>WhatsApp</span>
-        </a>
-      </nav>
-
-      {/* ── PAGES ── */}
-      <div className="page-content">
-
-        {/* HOME */}
-        {page === "home" && (
-          <>
-            {/* Hero — mobile first: everything above fold */}
-            <section className="hero">
-              <div style={{ position:"absolute", top:"-60px", right:"-60px", width:"220px", height:"220px", borderRadius:"50%", background:"rgba(42,171,176,0.08)", pointerEvents:"none" }}/>
-              <div style={{ position:"absolute", bottom:"-40px", left:"-40px", width:"160px", height:"160px", borderRadius:"50%", background:"rgba(42,171,176,0.06)", pointerEvents:"none" }}/>
-
-              <div className="hero-layout">
-                {/* Nuti mascot — LEFT */}
-                <div className="hero-nuti">
-                  <img src="/nuti_hero.png" alt="Nuti, mascota de CuidaMed" className="nuti-img" />
-                </div>
-                {/* Text content — RIGHT */}
-                <div className="hero-inner">
-                  <div className="hero-badge">Santa Cruz de la Sierra · Bolivia</div>
-                  <h1 className="hero-title">
-                    Enfermería profesional<br/>
-                    <span>en tu hogar</span>
-                  </h1>
-                  <p className="hero-sub">
-                    Enfermeros certificados y verificados en Santa Cruz. Rápido, seguro y con calificaciones reales.
-                  </p>
-                  <button className="hero-btn" onClick={() => go("search")}>
-                    Encontrar un enfermero →
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            {/* Stats */}
-            <div className="stats-bar">
-              {[["48+","Enfermeros","🩺"],["4.9★","Calificación","⭐"],["500+","Servicios","✅"],["< 2h","Respuesta","⚡"]].map(([n,l,icon]) => (
-                <div key={l} className="stat-item">
-                  <div className="stat-icon">{icon}</div>
-                  <div className="stat-num">{n}</div>
-                  <div className="stat-label">{l}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Servicios preview */}
-            <div className="section" style={{ background: C.white }}>
-              <div style={{ textAlign:"center", marginBottom:"1.25rem" }}>
-                <div style={{ display:"inline-block", background:C.accent, color:C.tealDark, borderRadius:"100px", padding:"0.25rem 0.9rem", fontSize:"0.68rem", letterSpacing:"0.1em", textTransform:"uppercase", fontWeight:"700", marginBottom:"0.5rem" }}>Nuestros servicios</div>
-                <h2 className="section-title">¿Qué hacemos?</h2>
-                <p className="section-sub">Atención profesional de enfermería en tu hogar</p>
-              </div>
-              <div className="services-grid">
-                {SERVICIOS.map((s,i) => (
-                  <div key={i} style={{ background:C.bg, borderRadius:"12px", padding:"1.1rem", border:`1px solid ${C.border}`, display:"flex", gap:"0.85rem", alignItems:"flex-start" }}>
-                    <div style={{ fontSize:"1.5rem", flexShrink:0 }}>{s.icon}</div>
-                    <div>
-                      <div style={{ fontWeight:"700", color:C.navy, fontSize:"0.88rem", marginBottom:"0.25rem" }}>{s.title}</div>
-                      <div style={{ color:C.muted, fontSize:"0.75rem", lineHeight:1.6 }}>{s.desc}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ textAlign:"center", marginTop:"1.5rem" }}>
-                <button onClick={() => go("search")} style={{ background:C.teal, color:C.white, border:"none", borderRadius:"8px", padding:"0.85rem 2rem", fontSize:"0.9rem", fontWeight:"700", cursor:"pointer", boxShadow:"0 4px 16px rgba(42,171,176,0.3)", width:"100%", maxWidth:"320px" }}>
-                  Solicitar un enfermero →
-                </button>
-              </div>
-            </div>
-
-            {/* Cómo funciona */}
-            <div className="section" style={{ background:C.bgAlt, borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`, textAlign:"center" }}>
-              <h2 className="section-title">¿Cómo funciona?</h2>
-              <p className="section-sub">Tres pasos simples para recibir atención en casa</p>
-              <div style={{ display:"flex", flexDirection:"column", gap:"1rem" }}>
-                {[["🔍","Buscá un enfermero","Filtrá por zona y especialidad."],["📋","Completá el formulario","Ingresá tus datos y describí qué necesitás."],["💬","Confirmá por WhatsApp","Se abre WhatsApp directo con CuidaMed. Coordinamos todo."]].map(([icon,t,d],i) => (
-                  <div key={i} style={{ background:C.white, borderRadius:"12px", padding:"1.25rem", border:`1px solid ${C.border}`, display:"flex", gap:"1rem", alignItems:"flex-start", textAlign:"left" }}>
-                    <div style={{ width:"36px", height:"36px", background:C.teal, color:C.white, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"0.85rem", fontWeight:"800", flexShrink:0 }}>{i+1}</div>
-                    <div>
-                      <div style={{ fontWeight:"700", color:C.navy, fontSize:"0.9rem", marginBottom:"0.2rem" }}>{t}</div>
-                      <div style={{ color:C.muted, fontSize:"0.78rem", lineHeight:1.55 }}>{d}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* WA banner */}
-            <div className="section" style={{ background:`linear-gradient(135deg, ${C.teal}, ${C.tealDark})`, textAlign:"center" }}>
-              <h2 style={{ color:C.white, fontSize:"1.2rem", fontWeight:"800", marginBottom:"0.5rem" }}>¿Sos enfermero/a en Santa Cruz?</h2>
-              <p style={{ color:"rgba(255,255,255,0.82)", marginBottom:"1.25rem", fontSize:"0.82rem" }}>Unite a CuidaMed y conseguí clientes de forma constante.</p>
-              <a href={buildDirectWA()} target="_blank" rel="noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:"8px", background:C.white, color:C.tealDark, borderRadius:"8px", padding:"0.8rem 1.5rem", fontSize:"0.88rem", fontWeight:"700", textDecoration:"none" }}>
-                <WAIcon size={16} color={C.tealDark}/> Registrarme por WhatsApp
-              </a>
-            </div>
-          </>
-        )}
-
-        {/* BUSCAR */}
-        {page === "search" && (
-          <div className="section">
-            <h2 className="section-title">Encontrá tu enfermero</h2>
-            <p className="section-sub">Filtrá por zona y tipo de servicio</p>
-            <div style={{ display:"flex", flexDirection:"column", gap:"0.75rem", marginBottom:"1.5rem" }}>
-              {[[zones,selectedZone,setZone],[services,selectedService,setSvc]].map(([opts,val,setter],i) => (
-                <select key={i} value={val} onChange={e => setter(e.target.value)} style={{ background:C.white, border:`1.5px solid ${C.border}`, borderRadius:"8px", padding:"0.75rem 1rem", fontSize:"0.9rem", color:C.text, outline:"none", width:"100%" }}>
-                  {opts.map(o => <option key={o}>{o}</option>)}
-                </select>
-              ))}
-            </div>
-            {filtered.length === 0 ? (
-              <div style={{ textAlign:"center", color:C.muted, padding:"3rem 0" }}>
-                <div style={{ fontSize:"2.5rem", marginBottom:"1rem" }}>🔍</div>
-                No hay enfermeros con esos filtros.
-              </div>
-            ) : (
-              <div className="cards-grid">
-                {filtered.map(n => (
-                  <NurseCard key={n.id} nurse={n} onSelect={() => { setNurse(n); setBooked(false); setForm({ nombre:"", telefono:"", fecha:"", descripcion:"" }); }}/>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* SERVICIOS */}
-        {page === "servicios" && (
-          <div>
-            <div style={{ background:`linear-gradient(135deg, ${C.navy} 0%, #1D5070 60%, ${C.tealDark} 100%)`, padding:"3rem 1.25rem 2.5rem", textAlign:"center" }}>
-              <h1 style={{ color:C.white, fontSize:"1.6rem", fontWeight:"800", lineHeight:1.2, marginBottom:"0.75rem" }}>
-                Nuestros servicios de<br/><span style={{ color:C.teal }}>enfermería a domicilio</span>
-              </h1>
-              <p style={{ color:"rgba(255,255,255,0.72)", fontSize:"0.85rem", maxWidth:"500px", margin:"0 auto", lineHeight:1.7 }}>
-                Todos los servicios son realizados por enfermeros licenciados y verificados en Santa Cruz.
-              </p>
-            </div>
-            <div className="section">
-              <div className="services-grid" style={{ marginBottom:"2rem" }}>
-                {SERVICIOS.map((s,i) => (
-                  <div key={i} style={{ background:C.white, borderRadius:"14px", padding:"1.5rem", border:`1px solid ${C.border}`, boxShadow:"0 2px 8px rgba(27,58,92,0.05)" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:"0.85rem", marginBottom:"0.75rem" }}>
-                      <div style={{ width:"44px", height:"44px", borderRadius:"10px", background:C.accent, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.3rem", flexShrink:0 }}>{s.icon}</div>
-                      <div style={{ fontWeight:"800", color:C.navy, fontSize:"0.9rem", lineHeight:1.3 }}>{s.title}</div>
-                    </div>
-                    <p style={{ color:C.muted, fontSize:"0.78rem", lineHeight:1.7, marginBottom:"1rem" }}>{s.desc}</p>
-                    <a href={buildDirectWA()} target="_blank" rel="noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:"6px", background:"#25D366", color:C.white, borderRadius:"7px", padding:"0.55rem 0.9rem", fontSize:"0.75rem", fontWeight:"700", textDecoration:"none" }}>
-                      <WAIcon size={13}/> Consultar
-                    </a>
-                  </div>
-                ))}
-              </div>
-              <div style={{ background:`linear-gradient(135deg, ${C.navy}, #1D5070)`, borderRadius:"16px", padding:"2rem", textAlign:"center" }}>
-                <h2 style={{ color:C.white, fontSize:"1.1rem", fontWeight:"800", marginBottom:"0.5rem" }}>¿No encontrás lo que buscás?</h2>
-                <p style={{ color:"rgba(255,255,255,0.7)", marginBottom:"1.25rem", fontSize:"0.82rem" }}>Escribinos por WhatsApp sin compromiso.</p>
-                <a href={buildDirectWA()} target="_blank" rel="noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:"8px", background:"#25D366", color:C.white, borderRadius:"8px", padding:"0.8rem 1.5rem", fontSize:"0.88rem", fontWeight:"700", textDecoration:"none" }}>
-                  <WAIcon size={16}/> Consultar por WhatsApp
-                </a>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* QUIÉNES SOMOS */}
-        {page === "about" && (
-          <div>
-            <div style={{ background:`linear-gradient(135deg, ${C.navy} 0%, #1D5070 60%, ${C.tealDark} 100%)`, padding:"3rem 1.25rem 2.5rem", textAlign:"center" }}>
-              <h1 style={{ color:C.white, fontSize:"1.6rem", fontWeight:"800", lineHeight:1.2, marginBottom:"0.75rem" }}>
-                Nacimos en Santa Cruz<br/><span style={{ color:C.teal }}>para cuidar a los que queremos</span>
-              </h1>
-              <p style={{ color:"rgba(255,255,255,0.72)", fontSize:"0.85rem", maxWidth:"500px", margin:"0 auto", lineHeight:1.7 }}>
-                CuidaMed nació de una necesidad real: encontrar atención de enfermería confiable en casa, sin complicaciones.
-              </p>
-            </div>
-            <div className="section">
-              <div style={{ display:"flex", flexDirection:"column", gap:"1rem", marginBottom:"2rem" }}>
-                {[{ icon:"🎯", title:"Nuestra misión", text:"Conectar a familias cruceñas con enfermeros profesionales verificados, garantizando atención de calidad en el hogar." },{ icon:"🌟", title:"Nuestra visión", text:"Ser la plataforma de salud domiciliaria más confiable de Bolivia." },{ icon:"💙", title:"Nuestros valores", text:"Confianza, profesionalismo y cercanía. La salud en casa es un derecho." }].map(({ icon, title, text }) => (
-                  <div key={title} style={{ background:C.white, borderRadius:"14px", padding:"1.5rem", border:`1px solid ${C.border}` }}>
-                    <div style={{ fontSize:"1.8rem", marginBottom:"0.75rem" }}>{icon}</div>
-                    <h3 style={{ color:C.navy, fontWeight:"800", fontSize:"1rem", marginBottom:"0.5rem" }}>{title}</h3>
-                    <p style={{ color:C.muted, fontSize:"0.82rem", lineHeight:1.7 }}>{text}</p>
-                  </div>
-                ))}
-              </div>
-              <button onClick={() => go("search")} style={{ background:C.teal, color:C.white, border:"none", borderRadius:"8px", padding:"0.9rem", fontSize:"0.9rem", fontWeight:"700", cursor:"pointer", width:"100%", boxShadow:"0 4px 16px rgba(42,171,176,0.3)" }}>
-                Encontrar un enfermero →
-              </button>
-            </div>
-          </div>
-        )}
-
-      </div>{/* end page-content */}
-
-      {/* ── MODAL BOOKING ── */}
-      {selectedNurse && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(27,58,92,0.6)", display:"flex", alignItems:"flex-end", justifyContent:"center", zIndex:1000, backdropFilter:"blur(3px)" }} onClick={() => setNurse(null)}>
-          <div style={{ background:C.white, borderRadius:"20px 20px 0 0", padding:"1.5rem", width:"100%", maxWidth:"500px", boxShadow:"0 -20px 60px rgba(27,58,92,0.3)", maxHeight:"90vh", overflowY:"auto" }} onClick={e => e.stopPropagation()}>
-            {/* Handle bar */}
-            <div style={{ width:"40px", height:"4px", background:C.border, borderRadius:"2px", margin:"0 auto 1.25rem" }}/>
-
-            {booked ? (
-              <div style={{ textAlign:"center", padding:"1rem 0 1.5rem" }}>
-                <div style={{ fontSize:"3rem", marginBottom:"0.75rem" }}>✅</div>
-                <h3 style={{ color:C.navy, marginBottom:"0.5rem", fontSize:"1.2rem", fontWeight:"800" }}>¡Solicitud enviada!</h3>
-                <p style={{ color:C.muted, fontSize:"0.85rem", lineHeight:1.7, marginBottom:"1.5rem" }}>Tu solicitud fue enviada a CuidaMed por WhatsApp. Te confirmaremos en breve.</p>
-                <div style={{ background:C.accent, borderRadius:"10px", padding:"0.9rem", fontSize:"0.82rem", color:C.tealDark, marginBottom:"1.5rem" }}>
-                  📱 Revisá tu WhatsApp — CuidaMed te contactará pronto
-                </div>
-                <button style={{ background:C.teal, color:C.white, border:"none", borderRadius:"8px", padding:"0.85rem", fontSize:"0.9rem", fontWeight:"700", cursor:"pointer", width:"100%" }} onClick={() => setNurse(null)}>Cerrar</button>
-              </div>
-            ) : (
-              <>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"1.25rem" }}>
-                  <h3 style={{ color:C.navy, fontSize:"1.1rem", fontWeight:"800" }}>Solicitar servicio</h3>
-                  <button onClick={() => setNurse(null)} style={{ background:"none", border:"none", fontSize:"1.1rem", cursor:"pointer", color:C.muted, padding:"0.25rem" }}>✕</button>
-                </div>
-                {/* Nurse summary */}
-                <div style={{ display:"flex", alignItems:"center", gap:"0.85rem", marginBottom:"1.25rem", background:C.accent, borderRadius:"10px", padding:"0.9rem" }}>
-                  <div style={{ width:"44px", height:"44px", borderRadius:"50%", background:selectedNurse.color, display:"flex", alignItems:"center", justifyContent:"center", color:C.white, fontWeight:"800", fontSize:"0.85rem", flexShrink:0 }}>{selectedNurse.avatar}</div>
-                  <div>
-                    <div style={{ fontWeight:"700", color:C.navy, fontSize:"0.9rem" }}>{selectedNurse.name}</div>
-                    <div style={{ fontSize:"0.78rem", color:C.tealDark }}>{selectedNurse.specialty}</div>
-                    <div style={{ fontSize:"0.72rem", color:C.muted }}>{selectedNurse.zone} · Bs. {selectedNurse.price}</div>
-                  </div>
-                </div>
-                {/* Form */}
-                {[["Tu nombre *","text","Ej: Ana Rodríguez","nombre"],["Tu teléfono *","tel","Ej: 70012345","telefono"]].map(([lbl,type,ph,key]) => (
-                  <div key={key} style={{ marginBottom:"0.85rem" }}>
-                    <label style={{ display:"block", fontSize:"0.72rem", color:C.muted, marginBottom:"0.25rem", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:"600" }}>{lbl}</label>
-                    <input type={type} placeholder={ph} value={form[key]} onChange={e => setForm(f => ({ ...f, [key]:e.target.value }))} style={{ width:"100%", border:`1.5px solid ${C.border}`, borderRadius:"8px", padding:"0.7rem 0.9rem", fontSize:"0.9rem", boxSizing:"border-box", color:C.text, outline:"none" }}/>
-                  </div>
-                ))}
-                <div style={{ marginBottom:"0.85rem" }}>
-                  <label style={{ display:"block", fontSize:"0.72rem", color:C.muted, marginBottom:"0.25rem", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:"600" }}>Fecha y hora</label>
-                  <input type="datetime-local" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha:e.target.value }))} style={{ width:"100%", border:`1.5px solid ${C.border}`, borderRadius:"8px", padding:"0.7rem 0.9rem", fontSize:"0.9rem", boxSizing:"border-box", color:C.text, outline:"none" }}/>
-                </div>
-                <div style={{ marginBottom:"1.25rem" }}>
-                  <label style={{ display:"block", fontSize:"0.72rem", color:C.muted, marginBottom:"0.25rem", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:"600" }}>Descripción</label>
-                  <textarea placeholder="Describí qué necesitás..." value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion:e.target.value }))} style={{ width:"100%", border:`1.5px solid ${C.border}`, borderRadius:"8px", padding:"0.7rem 0.9rem", fontSize:"0.9rem", boxSizing:"border-box", color:C.text, outline:"none", height:"72px", resize:"vertical" }}/>
-                </div>
-                <button style={{ background:"#25D366", color:C.white, border:"none", borderRadius:"10px", padding:"0.95rem", fontSize:"0.95rem", fontWeight:"800", cursor:"pointer", width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:"8px", boxShadow:"0 4px 16px rgba(37,211,102,0.35)" }} onClick={handleConfirmar}>
-                  <WAIcon size={20}/> Confirmar por WhatsApp · Bs. {selectedNurse.price}
-                </button>
-                <p style={{ color:C.muted, fontSize:"0.68rem", textAlign:"center", marginTop:"0.6rem" }}>Se abrirá WhatsApp con tu solicitud lista para enviar</p>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── BOTTOM NAV (mobile) ── */}
-      <nav className="bottom-nav">
-        {[["home","🏠","Inicio"],["search","🔍","Buscar"],["servicios","🩺","Servicios"],["about","ℹ️","Nosotros"]].map(([p,icon,lbl]) => (
-          <button key={p} className={`bottom-nav-btn${page===p?" active":""}`} onClick={() => go(p)} style={{ color: page===p ? C.teal : C.muted }}>
-            <span>{icon}</span>
-            <span>{lbl}</span>
-          </button>
-        ))}
-        <a href="/enfermero" style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"0.6rem 0.25rem", textDecoration:"none", color: C.muted, gap:"0.2rem" }}>
-          <span style={{ fontSize:"1.2rem" }}>👩‍⚕️</span>
-          <span style={{ fontSize:"0.58rem", fontWeight:"700", textTransform:"uppercase", letterSpacing:"0.05em" }}>Soy Enf.</span>
-        </a>
-      </nav>
-
-      {/* ── FOOTER (desktop) ── */}
-      <footer style={{ background:C.navy, color:"rgba(255,255,255,0.5)", textAlign:"center", padding:"1.5rem", fontSize:"0.78rem", display:"none" }} className="desktop-footer">
-        <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:"8px", marginBottom:"0.5rem" }}>
-          <LogoIcon size={20} white/>
-          <span style={{ color:C.white, fontWeight:"700" }}>CuidaMed</span>
-        </div>
-        <a href={buildDirectWA()} target="_blank" rel="noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:"5px", background:"#25D366", color:C.white, borderRadius:"5px", padding:"0.3rem 0.75rem", fontSize:"0.72rem", fontWeight:"700", textDecoration:"none", marginBottom:"0.5rem" }}>
-          <WAIcon size={12}/> +591 63589689
-        </a>
-        <div>© 2025 CuidaMed · Santa Cruz de la Sierra, Bolivia</div>
-      </footer>
-    </div>
-  );
 }
 
-/* ── NurseCard ── */
-function NurseCard({ nurse, onSelect }) {
-  const [hovered, setHovered] = useState(false);
-  const requisitos = [
-    { icon:"🎓", label:"Licenciatura",  value:"UAGRM / Verificada" },
-    { icon:"🏛️", label:"Colegiatura",   value:"Colegio de Enfermeras de Bolivia" },
-    { icon:"⏱️", label:"Experiencia",   value:nurse.exp },
-    { icon:"🏥", label:"Trabajo actual", value:nurse.trabajo || "Independiente" },
-  ];
+/* ── Auth Form ── */
+function AuthForm({ onLogin }) {
+  const [mode, setMode] = useState("login");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({ nombre: "", email: "", password: "", confirm: "" });
+
+  function set(k, v) { setForm(f => ({ ...f, [k]: v })); setError(""); }
+
+  async function handleSubmit() {
+    setError(""); setLoading(true);
+    try {
+      if (mode === "register") {
+        if (!form.nombre.trim()) { setError("Ingresá tu nombre completo."); return; }
+        if (form.password !== form.confirm) { setError("Las contraseñas no coinciden."); return; }
+        if (form.password.length < 6) { setError("La contraseña debe tener al menos 6 caracteres."); return; }
+        const { data, ok } = await signUp(form.email, form.password, form.nombre);
+        if (!ok) { setError(data.msg || data.error_description || "Error al registrarse."); return; }
+        if (data.access_token) { onLogin(data); return; }
+        setError("Revisá tu email para confirmar tu cuenta, luego ingresá.");
+        setMode("login");
+      } else {
+        const { data, ok } = await signIn(form.email, form.password);
+        if (!ok) { setError("Email o contraseña incorrectos."); return; }
+        onLogin(data);
+      }
+    } finally { setLoading(false); }
+  }
+
   return (
-    <div style={{ background:C.white, borderRadius:"14px", overflow:"hidden", border:`1px solid ${C.border}`, transition:"transform 0.2s, box-shadow 0.2s", transform:hovered?"translateY(-3px)":"none", boxShadow:hovered?"0 12px 32px rgba(27,58,92,0.14)":"0 2px 8px rgba(27,58,92,0.06)" }}
-      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
-      <div style={{ height:"5px", background:nurse.color }}/>
-      <div style={{ padding:"1.25rem" }}>
+    <div style={{ minHeight: "100vh", background: `linear-gradient(145deg, #0D2137, ${C.navy}, ${C.tealDark})`, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+      <div style={{ background: C.white, borderRadius: "20px", padding: "2.5rem 2rem", width: "100%", maxWidth: "420px", boxShadow: "0 30px 80px rgba(13,33,55,0.3)" }}>
         {/* Header */}
-        <div style={{ display:"flex", alignItems:"center", gap:"0.85rem", marginBottom:"0.85rem" }}>
-          <div style={{ width:"46px", height:"46px", borderRadius:"50%", background:nurse.color, display:"flex", alignItems:"center", justifyContent:"center", color:C.white, fontWeight:"800", fontSize:"0.85rem", flexShrink:0 }}>{nurse.avatar}</div>
-          <div>
-            <div style={{ fontWeight:"700", color:C.navy, fontSize:"0.9rem" }}>{nurse.name}</div>
-            <div style={{ fontSize:"0.78rem", color:C.tealDark, fontWeight:"600" }}>{nurse.specialty}</div>
+        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "56px", height: "56px", background: `linear-gradient(135deg, ${C.teal}, ${C.tealDark})`, borderRadius: "16px", marginBottom: "1rem", boxShadow: `0 8px 24px rgba(42,171,176,0.3)` }}>
+            <LogoIcon size={32} white />
           </div>
+          <h1 style={{ color: C.navy, fontSize: "1.4rem", fontWeight: "800", marginBottom: "0.25rem" }}>CuidaMed</h1>
+          <p style={{ color: C.muted, fontSize: "0.85rem" }}>Portal de Enfermeros</p>
         </div>
-        {/* Badges */}
-        <div style={{ display:"flex", gap:"0.4rem", flexWrap:"wrap", marginBottom:"0.85rem" }}>
-          <span style={{ background:C.accent, color:C.tealDark, borderRadius:"100px", padding:"0.22rem 0.65rem", fontSize:"0.7rem", fontWeight:"600" }}>📍 {nurse.zone}</span>
-          <span style={{ background:nurse.available?"#E6F7F1":"#FEE8E7", color:nurse.available?"#1A7A50":"#C0392B", borderRadius:"100px", padding:"0.22rem 0.65rem", fontSize:"0.7rem", fontWeight:"700" }}>
-            {nurse.available ? "● Disponible" : "○ Ocupado"}
-          </span>
-        </div>
-        {/* Requisitos */}
-        <div style={{ background:"#F8FFFE", borderRadius:"10px", padding:"0.75rem", marginBottom:"0.85rem", border:`1px solid ${C.border}` }}>
-          <div style={{ fontSize:"0.62rem", fontWeight:"800", color:C.tealDark, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:"0.5rem" }}>✅ Requisitos verificados por CuidaMed</div>
-          {requisitos.map((r,i) => (
-            <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:"0.4rem", marginBottom:i<requisitos.length-1?"0.38rem":0 }}>
-              <span style={{ fontSize:"0.75rem", flexShrink:0 }}>{r.icon}</span>
-              <div>
-                <span style={{ fontSize:"0.68rem", color:C.muted }}>{r.label}: </span>
-                <span style={{ fontSize:"0.68rem", color:C.navy, fontWeight:"700" }}>{r.value}</span>
-              </div>
-            </div>
+
+        {/* Tabs */}
+        <div style={{ display: "flex", background: C.bg, borderRadius: "10px", padding: "4px", marginBottom: "1.5rem" }}>
+          {[["login","Ingresar"],["register","Registrarse"]].map(([m,lbl]) => (
+            <button key={m} onClick={() => { setMode(m); setError(""); }} style={{ flex:1, padding:"0.6rem", borderRadius:"8px", border:"none", cursor:"pointer", fontWeight:"700", fontSize:"0.85rem", background: mode===m ? C.white : "transparent", color: mode===m ? C.navy : C.muted, boxShadow: mode===m ? "0 2px 8px rgba(27,58,92,0.1)" : "none", transition:"all 0.2s", fontFamily:"inherit" }}>
+              {lbl}
+            </button>
           ))}
         </div>
-        {/* Rating & price */}
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", paddingTop:"0.65rem", borderTop:`1px solid ${C.border}`, fontSize:"0.8rem", color:C.muted, marginBottom:"0.85rem" }}>
-          <span>⭐ <strong style={{ color:C.navy }}>{nurse.rating}</strong> ({nurse.reviews})</span>
-          <span style={{ fontWeight:"800", color:C.navy, fontSize:"0.95rem" }}>Bs. {nurse.price}</span>
+
+        {/* Fields */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+          {mode === "register" && (
+            <div>
+              <label style={{ display:"block", fontSize:"0.72rem", color:C.muted, marginBottom:"0.3rem", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:"600" }}>Nombre completo</label>
+              <input placeholder="Lic. Ana Rodríguez" value={form.nombre} onChange={e => set("nombre", e.target.value)} style={{ width:"100%", border:`1.5px solid ${C.border}`, borderRadius:"8px", padding:"0.75rem 1rem", fontSize:"0.9rem", boxSizing:"border-box", outline:"none", color:C.text }} />
+            </div>
+          )}
+          <div>
+            <label style={{ display:"block", fontSize:"0.72rem", color:C.muted, marginBottom:"0.3rem", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:"600" }}>Email</label>
+            <input type="email" placeholder="tu@email.com" value={form.email} onChange={e => set("email", e.target.value)} style={{ width:"100%", border:`1.5px solid ${C.border}`, borderRadius:"8px", padding:"0.75rem 1rem", fontSize:"0.9rem", boxSizing:"border-box", outline:"none", color:C.text }} />
+          </div>
+          <div>
+            <label style={{ display:"block", fontSize:"0.72rem", color:C.muted, marginBottom:"0.3rem", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:"600" }}>Contraseña</label>
+            <input type="password" placeholder="••••••••" value={form.password} onChange={e => set("password", e.target.value)} style={{ width:"100%", border:`1.5px solid ${C.border}`, borderRadius:"8px", padding:"0.75rem 1rem", fontSize:"0.9rem", boxSizing:"border-box", outline:"none", color:C.text }} />
+          </div>
+          {mode === "register" && (
+            <div>
+              <label style={{ display:"block", fontSize:"0.72rem", color:C.muted, marginBottom:"0.3rem", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:"600" }}>Confirmar contraseña</label>
+              <input type="password" placeholder="••••••••" value={form.confirm} onChange={e => set("confirm", e.target.value)} style={{ width:"100%", border:`1.5px solid ${C.border}`, borderRadius:"8px", padding:"0.75rem 1rem", fontSize:"0.9rem", boxSizing:"border-box", outline:"none", color:C.text }} />
+            </div>
+          )}
         </div>
-        {/* Button */}
-        <button style={{ background:nurse.available?"#25D366":"#CCC", color:C.white, border:"none", borderRadius:"8px", padding:"0.75rem", fontSize:"0.85rem", fontWeight:"700", cursor:nurse.available?"pointer":"not-allowed", width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:"6px" }}
-          onClick={() => nurse.available && onSelect()} disabled={!nurse.available}>
-          {nurse.available ? <><WAIcon size={15}/> Solicitar servicio</> : "No disponible"}
+
+        {error && (
+          <div style={{ background: "#FEE8E7", borderRadius: "8px", padding: "0.75rem 1rem", marginTop: "1rem", color: C.red, fontSize: "0.82rem", fontWeight: "600" }}>
+            ⚠️ {error}
+          </div>
+        )}
+
+        <button onClick={handleSubmit} disabled={loading} style={{ width:"100%", background:`linear-gradient(135deg, ${C.teal}, ${C.tealDark})`, color:C.white, border:"none", borderRadius:"10px", padding:"0.9rem", fontSize:"0.95rem", fontWeight:"800", cursor:loading?"not-allowed":"pointer", marginTop:"1.25rem", boxShadow:`0 6px 20px rgba(42,171,176,0.35)`, fontFamily:"inherit", opacity:loading?0.7:1 }}>
+          {loading ? "Cargando..." : mode === "login" ? "Ingresar" : "Crear cuenta"}
         </button>
+
+        {mode === "register" && (
+          <p style={{ color: C.muted, fontSize: "0.72rem", textAlign: "center", marginTop: "1rem", lineHeight: 1.5 }}>
+            Al registrarte aceptás que CuidaMed verificará tus credenciales profesionales antes de activar tu perfil público.
+          </p>
+        )}
       </div>
     </div>
   );
+}
+
+/* ── Dashboard ── */
+function Dashboard({ session, onLogout }) {
+  const [tab, setTab] = useState("perfil");
+  const [profile, setProfile] = useState(null);
+  const [servicios, setServicios] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
+
+  const token = session.access_token;
+  const userId = session.user.id;
+
+  useEffect(() => {
+    async function load() {
+      setLoadingData(true);
+      const [prof, svcs] = await Promise.all([
+        getProfile(userId, token),
+        getServicios(userId, token),
+      ]);
+      if (prof.ok && prof.data[0]) setProfile({ ...prof.data[0], _original: { ...prof.data[0] } });
+      if (svcs.ok) setServicios(svcs.data);
+      setLoadingData(false);
+    }
+    load();
+  }, [userId, token]);
+
+  function setP(k, v) { setProfile(p => ({ ...p, [k]: v })); setSaved(false); }
+
+  async function handleSave() {
+    setSaving(true);
+    const payload = {
+      nombre_completo: profile.nombre_completo,
+      telefono: profile.telefono,
+      especialidad: profile.especialidad,
+      zona: profile.zona,
+      experiencia_anos: Number(profile.experiencia_anos) || 0,
+      trabajo_actual: profile.trabajo_actual,
+      bio: profile.bio,
+      disponible: profile.disponible,
+    };
+
+    // Detect what changed
+    const LABELS = {
+      nombre_completo: "Nombre", telefono: "Teléfono",
+      especialidad: "Especialidad", zona: "Zona",
+      experiencia_anos: "Experiencia", trabajo_actual: "Trabajo actual",
+      bio: "Presentación", disponible: "Disponible",
+    };
+    const cambios = Object.keys(payload)
+      .filter(k => String(payload[k]) !== String(profile._original?.[k] ?? ""))
+      .map(k => ({ campo: LABELS[k] || k, antes: profile._original?.[k], despues: payload[k] }));
+
+    const { ok, data, status } = await updateProfile(userId, token, payload);
+    setSaving(false);
+    if (ok) {
+      setSaved(true);
+      setProfile(p => ({ ...p, _original: { ...payload } }));
+      notificarAdmin({ ...profile, ...payload, _cambios: cambios });
+    } else {
+      alert("Error al guardar: " + JSON.stringify(data) + " (status: " + status + ")");
+    }
+  }
+
+  async function toggleDisponible() {
+    const nuevo = !profile.disponible;
+    setP("disponible", nuevo);
+    await updateProfile(userId, token, { disponible: nuevo });
+  }
+
+  async function handleLogout() {
+    await signOut(token);
+    onLogout();
+  }
+
+  const completados = servicios.filter(s => s.estado === "completado").length;
+  const pendientes  = servicios.filter(s => s.estado === "pendiente").length;
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Segoe UI','Helvetica Neue',Arial,sans-serif" }}>
+
+      {/* Nav */}
+      <nav style={{ background: C.navy, height: "60px", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 1.5rem", boxShadow: "0 2px 12px rgba(27,58,92,0.25)", position: "sticky", top: 0, zIndex: 100 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <LogoIcon size={28} white />
+          <div>
+            <span style={{ color: C.white, fontWeight: "800", fontSize: "1rem" }}>Cuida</span>
+            <span style={{ color: C.teal,  fontWeight: "800", fontSize: "1rem" }}>Med</span>
+            <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.72rem", marginLeft: "6px" }}>Portal Enfermero</span>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          {profile && (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: `linear-gradient(135deg, ${C.teal}, ${C.tealDark})`, display: "flex", alignItems: "center", justifyContent: "center", color: C.white, fontWeight: "800", fontSize: "0.75rem" }}>
+                {(profile.nombre_completo || "?")[0].toUpperCase()}
+              </div>
+              <span style={{ color: "rgba(255,255,255,0.75)", fontSize: "0.82rem" }}>{(profile.nombre_completo || "").split(" ")[0]}</span>
+            </div>
+          )}
+          <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.75)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "6px", padding: "0.35rem 0.85rem", fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit" }}>
+            Salir
+          </button>
+        </div>
+      </nav>
+
+      <div style={{ maxWidth: "900px", margin: "0 auto", padding: "1.5rem 1rem 4rem" }}>
+
+        {loadingData ? (
+          <div style={{ textAlign: "center", padding: "4rem", color: C.muted }}>
+            <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>⏳</div>
+            Cargando tu perfil...
+          </div>
+        ) : (
+          <>
+            {/* Stats cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
+              {[
+                { label: "Servicios completados", value: completados, icon: "✅", color: "#1A7A50", bg: "#E6F7F1" },
+                { label: "Solicitudes pendientes", value: pendientes,  icon: "⏳", color: "#B7791F", bg: "#FEF3C7" },
+                { label: "Estado actual",  value: profile?.disponible ? "Disponible" : "No disponible", icon: profile?.disponible ? "🟢" : "🔴", color: profile?.disponible ? "#1A7A50" : C.red, bg: profile?.disponible ? "#E6F7F1" : "#FEE8E7" },
+              ].map(({ label, value, icon, color, bg }) => (
+                <div key={label} style={{ background: C.white, borderRadius: "12px", padding: "1.25rem", border: `1px solid ${C.border}`, boxShadow: "0 2px 8px rgba(27,58,92,0.05)" }}>
+                  <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>{icon}</div>
+                  <div style={{ fontWeight: "800", color, fontSize: "1.2rem" }}>{value}</div>
+                  <div style={{ color: C.muted, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.07em", marginTop: "0.2rem" }}>{label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tabs */}
+            <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", borderBottom: `2px solid ${C.border}` }}>
+              {[["perfil","👤 Mi perfil"],["disponibilidad","📅 Disponibilidad"],["servicios","📋 Mis servicios"]].map(([t,lbl]) => (
+                <button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", cursor: "pointer", padding: "0.7rem 1.25rem", fontWeight: "700", fontSize: "0.82rem", color: tab===t ? C.teal : C.muted, borderBottom: tab===t ? `2px solid ${C.teal}` : "2px solid transparent", marginBottom: "-2px", fontFamily: "inherit", transition: "all 0.2s" }}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+
+            {/* PERFIL TAB */}
+            {tab === "perfil" && profile && (
+              <div style={{ background: C.white, borderRadius: "16px", padding: "2rem", border: `1px solid ${C.border}`, boxShadow: "0 2px 12px rgba(27,58,92,0.06)" }}>
+                <h2 style={{ color: C.navy, fontSize: "1.1rem", fontWeight: "800", marginBottom: "1.5rem" }}>Información profesional</h2>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+                  {[
+                    ["Nombre completo", "nombre_completo", "text", "Lic. Ana Rodríguez"],
+                    ["Teléfono", "telefono", "tel", "70012345"],
+                    ["Años de experiencia", "experiencia_anos", "number", "5"],
+                    ["Trabajo actual", "trabajo_actual", "text", "Hospital Percy Boland"],
+                  ].map(([lbl, key, type, ph]) => (
+                    <div key={key}>
+                      <label style={{ display:"block", fontSize:"0.72rem", color:C.muted, marginBottom:"0.3rem", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:"600" }}>{lbl}</label>
+                      <input type={type} placeholder={ph} value={profile[key]||""} onChange={e => setP(key, e.target.value)} style={{ width:"100%", border:`1.5px solid ${C.border}`, borderRadius:"8px", padding:"0.7rem 1rem", fontSize:"0.88rem", boxSizing:"border-box", color:C.text, outline:"none" }} />
+                    </div>
+                  ))}
+
+                  <div>
+                    <label style={{ display:"block", fontSize:"0.72rem", color:C.muted, marginBottom:"0.3rem", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:"600" }}>Especialidad</label>
+                    <select value={profile.especialidad||""} onChange={e => setP("especialidad", e.target.value)} style={{ width:"100%", border:`1.5px solid ${C.border}`, borderRadius:"8px", padding:"0.7rem 1rem", fontSize:"0.88rem", boxSizing:"border-box", color:C.text, outline:"none", background:C.white }}>
+                      <option value="">Seleccioná una especialidad</option>
+                      {ESPECIALIDADES.map(e => <option key={e}>{e}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display:"block", fontSize:"0.72rem", color:C.muted, marginBottom:"0.3rem", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:"600" }}>Zona de atención</label>
+                    <select value={profile.zona||""} onChange={e => setP("zona", e.target.value)} style={{ width:"100%", border:`1.5px solid ${C.border}`, borderRadius:"8px", padding:"0.7rem 1rem", fontSize:"0.88rem", boxSizing:"border-box", color:C.text, outline:"none", background:C.white }}>
+                      <option value="">Seleccioná una zona</option>
+                      {ZONAS.map(z => <option key={z}>{z}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: "1rem" }}>
+                  <label style={{ display:"block", fontSize:"0.72rem", color:C.muted, marginBottom:"0.3rem", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:"600" }}>Presentación profesional</label>
+                  <textarea placeholder="Contá brevemente tu experiencia y enfoque profesional..." value={profile.bio||""} onChange={e => setP("bio", e.target.value)} style={{ width:"100%", border:`1.5px solid ${C.border}`, borderRadius:"8px", padding:"0.7rem 1rem", fontSize:"0.88rem", boxSizing:"border-box", color:C.text, outline:"none", height:"90px", resize:"vertical" }} />
+                </div>
+
+                {!profile.verificado && (
+                  <div style={{ background: "#FEF3C7", borderRadius: "10px", padding: "0.9rem 1rem", marginTop: "1.25rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <span style={{ fontSize: "1.25rem" }}>⏳</span>
+                    <div>
+                      <div style={{ fontWeight: "700", color: "#92400E", fontSize: "0.85rem" }}>Perfil pendiente de verificación</div>
+                      <div style={{ color: "#92400E", fontSize: "0.78rem", marginTop: "2px" }}>CuidaMed verificará tus credenciales. Recibirás un WhatsApp cuando estés activo.</div>
+                    </div>
+                  </div>
+                )}
+
+                {profile.verificado && (
+                  <div style={{ background: "#E6F7F1", borderRadius: "10px", padding: "0.9rem 1rem", marginTop: "1.25rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <span style={{ fontSize: "1.25rem" }}>✅</span>
+                    <div style={{ fontWeight: "700", color: "#1A7A50", fontSize: "0.85rem" }}>Perfil verificado por CuidaMed</div>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem", alignItems: "center" }}>
+                  <button onClick={handleSave} disabled={saving} style={{ background: `linear-gradient(135deg, ${C.teal}, ${C.tealDark})`, color: C.white, border: "none", borderRadius: "8px", padding: "0.8rem 2rem", fontSize: "0.9rem", fontWeight: "700", cursor: "pointer", fontFamily: "inherit", boxShadow: `0 4px 16px rgba(42,171,176,0.3)` }}>
+                    {saving ? "Guardando..." : "Guardar cambios"}
+                  </button>
+                  {saved && <span style={{ color: "#1A7A50", fontWeight: "700", fontSize: "0.85rem" }}>✓ Guardado</span>}
+                </div>
+              </div>
+            )}
+
+            {/* DISPONIBILIDAD TAB */}
+            {tab === "disponibilidad" && profile && (
+              <div style={{ background: C.white, borderRadius: "16px", padding: "2rem", border: `1px solid ${C.border}` }}>
+                <h2 style={{ color: C.navy, fontSize: "1.1rem", fontWeight: "800", marginBottom: "1.5rem" }}>Mi disponibilidad</h2>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.25rem", background: profile.disponible ? "#E6F7F1" : "#FEE8E7", borderRadius: "12px", marginBottom: "1.5rem", border: `1px solid ${profile.disponible ? "#A7F3D0" : "#FECACA"}` }}>
+                  <div>
+                    <div style={{ fontWeight: "800", color: profile.disponible ? "#1A7A50" : C.red, fontSize: "1rem" }}>
+                      {profile.disponible ? "🟢 Estás disponible" : "🔴 No disponible"}
+                    </div>
+                    <div style={{ color: C.muted, fontSize: "0.82rem", marginTop: "0.25rem" }}>
+                      {profile.disponible ? "Los pacientes pueden solicitarte servicios." : "Tu perfil no aparece en búsquedas activas."}
+                    </div>
+                  </div>
+                  <button onClick={toggleDisponible} style={{ background: profile.disponible ? C.red : C.green, color: C.white, border: "none", borderRadius: "8px", padding: "0.7rem 1.25rem", fontWeight: "700", fontSize: "0.85rem", cursor: "pointer", fontFamily: "inherit" }}>
+                    {profile.disponible ? "Pausar" : "Activar"}
+                  </button>
+                </div>
+
+                <div style={{ background: C.accent, borderRadius: "10px", padding: "1rem", fontSize: "0.82rem", color: C.tealDark, lineHeight: 1.6 }}>
+                  💡 <strong>Tip:</strong> Actualizá tu disponibilidad cuando salgas de vacaciones, estés en otro trabajo o no puedas atender. Esto evita solicitudes que no podés cumplir.
+                </div>
+              </div>
+            )}
+
+            {/* SERVICIOS TAB */}
+            {tab === "servicios" && (
+              <div style={{ background: C.white, borderRadius: "16px", padding: "2rem", border: `1px solid ${C.border}` }}>
+                <h2 style={{ color: C.navy, fontSize: "1.1rem", fontWeight: "800", marginBottom: "1.5rem" }}>Historial de servicios</h2>
+
+                {servicios.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "3rem 0", color: C.muted }}>
+                    <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>📋</div>
+                    <div style={{ fontWeight: "700", marginBottom: "0.5rem" }}>Todavía no tenés servicios registrados</div>
+                    <div style={{ fontSize: "0.85rem" }}>Cuando CuidaMed te asigne un servicio, aparecerá aquí.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                    {servicios.map(s => (
+                      <div key={s.id} style={{ border: `1px solid ${C.border}`, borderRadius: "10px", padding: "1rem", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem" }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem" }}>
+                            <span style={{ fontWeight: "700", color: C.navy, fontSize: "0.9rem" }}>{s.paciente_nombre}</span>
+                            <span style={{ background: s.estado==="completado" ? "#E6F7F1" : s.estado==="cancelado" ? "#FEE8E7" : "#FEF3C7", color: s.estado==="completado" ? "#1A7A50" : s.estado==="cancelado" ? C.red : "#92400E", borderRadius:"100px", padding:"0.15rem 0.6rem", fontSize:"0.68rem", fontWeight:"700" }}>
+                              {s.estado}
+                            </span>
+                          </div>
+                          <div style={{ color: C.muted, fontSize: "0.78rem" }}>{s.tipo_servicio} · {s.zona}</div>
+                          {s.descripcion && <div style={{ color: C.muted, fontSize: "0.75rem", marginTop: "0.3rem" }}>{s.descripcion}</div>}
+                        </div>
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          {s.precio && <div style={{ fontWeight: "800", color: C.navy, fontSize: "0.95rem" }}>Bs. {s.precio}</div>}
+                          <div style={{ color: C.muted, fontSize: "0.72rem", marginTop: "0.2rem" }}>
+                            {s.fecha ? new Date(s.fecha).toLocaleDateString("es-BO") : new Date(s.created_at).toLocaleDateString("es-BO")}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Main export ── */
+export default function EnfermeroPortal() {
+  const [session, setSession] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("cuidamed_session")); } catch { return null; }
+  });
+
+  function handleLogin(data) {
+    localStorage.setItem("cuidamed_session", JSON.stringify(data));
+    setSession(data);
+  }
+
+  function handleLogout() {
+    localStorage.removeItem("cuidamed_session");
+    setSession(null);
+  }
+
+  if (!session) return <AuthForm onLogin={handleLogin} />;
+  return <Dashboard session={session} onLogout={handleLogout} />;
 }
