@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import EnfermeroPortal from "./Enfermero.jsx";
 import "./index.css";
 
@@ -9,6 +9,35 @@ const C = {
 };
 
 const WA_NUMBER = "59163589689";
+const SB_URL = "https://jhmlpiimhlhpgvrqwepp.supabase.co";
+const SB_KEY = "sb_publishable_yS9NILyxhmUDAdQTisR0tw_zEF-4di0";
+
+async function fetchEnfermeros() {
+  try {
+    const res = await fetch(
+      `${SB_URL}/rest/v1/enfermeros?verificado=eq.true&select=id,nombre_completo,especialidad,zona,experiencia_anos,trabajo_actual,disponible,bio,telefono`,
+      { headers: { "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` } }
+    );
+    const data = await res.json();
+    return data.map((e, i) => ({
+      id: e.id,
+      name: e.nombre_completo || "Enfermero/a",
+      specialty: e.especialidad || "Enfermería general",
+      zone: e.zona || "Santa Cruz",
+      rating: 5.0,
+      reviews: 0,
+      price: 150,
+      available: e.disponible !== false,
+      exp: e.experiencia_anos ? `${e.experiencia_anos} años` : "—",
+      avatar: (e.nombre_completo || "EN").split(" ").map(w => w[0]).slice(0,2).join("").toUpperCase(),
+      color: ["#2AABB0","#1B3A5C","#1D8A8F","#2D6A8A","#1A5276","#117A65"][i % 6],
+      trabajo: e.trabajo_actual || "Independiente",
+    }));
+  } catch(e) {
+    console.error("Error fetching nurses:", e);
+    return [];
+  }
+}
 
 const SERVICIOS = [
   { icon: "💉", title: "Inyecciones y sueros",          desc: "Aplicación de inyecciones intramusculares, subcutáneas y endovenosas. Colocación y mantenimiento de catéteres y sueros en domicilio." },
@@ -22,12 +51,7 @@ const SERVICIOS = [
   { icon: "🚗", title: "Acompañamiento hospitalario",   desc: "Enfermero presente durante internaciones, estudios o consultas. Intermediación con el equipo médico." },
 ];
 
-const nurses = [
-  { id: 1, name: "Lic. María Fernández", specialty: "Cuidado adulto mayor",     zone: "Equipetrol", rating: 4.9, reviews: 38, price: 150, available: true,  exp: "8 años",  avatar: "MF", color: C.teal,     trabajo: "Hospital Percy Boland · SCZ" },
-  { id: 2, name: "Lic. Carlos Suárez",   specialty: "Enfermería general",       zone: "Norte",      rating: 4.8, reviews: 21, price: 130, available: true,  exp: "5 años",  avatar: "CS", color: C.navy,     trabajo: "Clínica del Norte · SCZ" },
-  { id: 3, name: "Lic. Valeria Torrico", specialty: "Pediatría domiciliaria",   zone: "Plan 3000",  rating: 5.0, reviews: 54, price: 170, available: false, exp: "10 años", avatar: "VT", color: C.tealDark, trabajo: "Hospital de la Mujer · SCZ" },
-  { id: 4, name: "Lic. Jorge Méndez",   specialty: "Post-operatorio",           zone: "Radial 26",  rating: 4.7, reviews: 17, price: 160, available: true,  exp: "6 años",  avatar: "JM", color: "#2D6A8A",  trabajo: "Clínica Los Olivos · SCZ" },
-];
+// nurses loaded from Supabase dynamically
 
 const zones    = ["Todas las zonas", "Equipetrol", "Norte", "Plan 3000", "Radial 26"];
 const services = ["Todos los servicios", "Cuidado adulto mayor", "Enfermería general", "Pediatría domiciliaria", "Post-operatorio"];
@@ -88,6 +112,16 @@ export default function App() {
   const [selectedNurse, setNurse]     = useState(null);
   const [booked, setBooked]           = useState(false);
   const [form, setForm]               = useState({ nombre:"", telefono:"", fecha:"", descripcion:"" });
+  const [nurses, setNurses]           = useState([]);
+  const [loadingNurses, setLoadingNurses] = useState(true);
+
+  // Load nurses from Supabase on mount
+  useEffect(() => {
+    fetchEnfermeros().then(data => {
+      setNurses(data);
+      setLoadingNurses(false);
+    });
+  }, []);
 
   const filtered = nurses.filter(n =>
     (selectedZone    === "Todas las zonas"      || n.zone      === selectedZone) &&
