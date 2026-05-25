@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const SUPABASE_URL = "https://jhmlpiimhlhpgvrqwepp.supabase.co";
 const SUPABASE_KEY = "sb_publishable_yS9NILyxhmUDAdQTisR0tw_zEF-4di0";
@@ -55,10 +55,7 @@ async function signOut(token) {
 
 async function getProfile(userId, token) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/enfermeros?id=eq.${userId}&select=*`, {
-    headers: {
-      "apikey": SUPABASE_KEY,
-      "Authorization": `Bearer ${token}`,
-    },
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` },
   });
   const data = await res.json();
   return { data, ok: res.ok };
@@ -81,13 +78,39 @@ async function updateProfile(userId, token, data) {
 
 async function getServicios(enfermeroId, token) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/servicios?enfermero_id=eq.${enfermeroId}&order=created_at.desc&select=*`, {
-    headers: {
-      "apikey": SUPABASE_KEY,
-      "Authorization": `Bearer ${token}`,
-    },
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` },
   });
   const data = await res.json();
   return { data, ok: res.ok };
+}
+
+/* ── Storage upload helper ── */
+async function uploadFile(token, userId, bucket, fieldName, file) {
+  const ext = file.name.split(".").pop();
+  const path = `${userId}/${fieldName}.${ext}`;
+
+  // Delete old file first (ignore errors)
+  await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`, {
+    method: "DELETE",
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` },
+  });
+
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`, {
+    method: "POST",
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": file.type,
+      "x-upsert": "true",
+    },
+    body: file,
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.message || "Error al subir archivo");
+  }
+  // Return public URL
+  return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
 }
 
 /* ── Icons ── */
@@ -143,15 +166,101 @@ async function notificarAdmin(profile) {
     await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: TG_CHAT,
-        text: msg,
-        parse_mode: "Markdown",
-      }),
+      body: JSON.stringify({ chat_id: TG_CHAT, text: msg, parse_mode: "Markdown" }),
     });
   } catch(e) {
     console.log("Telegram error:", e);
   }
+}
+
+/* ── Document Upload Card ── */
+function DocUploadCard({ label, icon, fieldName, currentUrl, accept, userId, token, onUploaded }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const [localUrl, setLocalUrl] = useState(currentUrl);
+  const inputRef = useRef();
+
+  const isImage = accept.includes("image");
+  const isPdf = !isImage;
+
+  async function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError("El archivo no debe superar 5 MB.");
+      return;
+    }
+
+    setError("");
+    setUploading(true);
+    try {
+      const url = await uploadFile(token, userId, "documentos-enfermeros", fieldName, file);
+      setLocalUrl(url);
+      onUploaded(fieldName, url);
+    } catch (err) {
+      setError(err.message || "Error al subir");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
+
+  const hasFile = !!localUrl;
+
+  return (
+    <div style={{ border: `1.5px solid ${hasFile ? C.teal : C.border}`, borderRadius: "12px", padding: "1.25rem", background: hasFile ? "#F0FAFB" : C.white, transition: "all 0.2s", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: hasFile ? `linear-gradient(135deg, ${C.teal}, ${C.tealDark})` : C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem", flexShrink: 0 }}>
+          {hasFile ? "✓" : icon}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: "700", color: C.navy, fontSize: "0.85rem" }}>{label}</div>
+          <div style={{ fontSize: "0.7rem", color: hasFile ? C.teal : C.muted, fontWeight: hasFile ? "600" : "400" }}>
+            {hasFile ? "Archivo subido ✓" : `Opcional · ${accept.includes("image") ? "JPG, PNG" : "PDF"} o imagen · máx. 5 MB`}
+          </div>
+        </div>
+        {hasFile && (
+          <a href={localUrl} target="_blank" rel="noreferrer" style={{ fontSize: "0.72rem", color: C.teal, fontWeight: "700", textDecoration: "none", background: C.accent, padding: "0.3rem 0.6rem", borderRadius: "6px" }}>
+            Ver
+          </a>
+        )}
+      </div>
+
+      {/* Preview for images */}
+      {hasFile && isImage && (
+        <div style={{ borderRadius: "8px", overflow: "hidden", border: `1px solid ${C.border}`, height: "120px", background: "#f0f0f0" }}>
+          <img src={localUrl} alt={label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        </div>
+      )}
+
+      {/* PDF indicator */}
+      {hasFile && isPdf && (
+        <div style={{ background: "#FEF3C7", borderRadius: "8px", padding: "0.6rem 0.75rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{ fontSize: "1.2rem" }}>📄</span>
+          <span style={{ fontSize: "0.78rem", color: "#92400E", fontWeight: "600" }}>PDF guardado</span>
+        </div>
+      )}
+
+      {error && (
+        <div style={{ background: "#FEE8E7", borderRadius: "6px", padding: "0.5rem 0.75rem", color: C.red, fontSize: "0.75rem", fontWeight: "600" }}>
+          ⚠️ {error}
+        </div>
+      )}
+
+      <input ref={inputRef} type="file" accept={accept} onChange={handleFile} style={{ display: "none" }} />
+
+      <button
+        onClick={() => inputRef.current.click()}
+        disabled={uploading}
+        style={{ background: hasFile ? "transparent" : `linear-gradient(135deg, ${C.teal}, ${C.tealDark})`, color: hasFile ? C.teal : C.white, border: hasFile ? `1.5px solid ${C.teal}` : "none", borderRadius: "8px", padding: "0.6rem", fontSize: "0.78rem", fontWeight: "700", cursor: uploading ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: uploading ? 0.7 : 1, transition: "all 0.2s" }}
+      >
+        {uploading ? "Subiendo..." : hasFile ? "Cambiar archivo" : "Subir archivo"}
+      </button>
+    </div>
+  );
 }
 
 /* ── Auth Form ── */
@@ -186,7 +295,6 @@ function AuthForm({ onLogin }) {
   return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(145deg, #0D2137, ${C.navy}, ${C.tealDark})`, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
       <div style={{ background: C.white, borderRadius: "20px", padding: "2.5rem 2rem", width: "100%", maxWidth: "420px", boxShadow: "0 30px 80px rgba(13,33,55,0.3)" }}>
-        {/* Header */}
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
           <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "56px", height: "56px", background: `linear-gradient(135deg, ${C.teal}, ${C.tealDark})`, borderRadius: "16px", marginBottom: "1rem", boxShadow: `0 8px 24px rgba(42,171,176,0.3)` }}>
             <LogoIcon size={32} white />
@@ -195,7 +303,6 @@ function AuthForm({ onLogin }) {
           <p style={{ color: C.muted, fontSize: "0.85rem" }}>Portal de Enfermeros</p>
         </div>
 
-        {/* Tabs */}
         <div style={{ display: "flex", background: C.bg, borderRadius: "10px", padding: "4px", marginBottom: "1.5rem" }}>
           {[["login","Ingresar"],["register","Registrarse"]].map(([m,lbl]) => (
             <button key={m} onClick={() => { setMode(m); setError(""); }} style={{ flex:1, padding:"0.6rem", borderRadius:"8px", border:"none", cursor:"pointer", fontWeight:"700", fontSize:"0.85rem", background: mode===m ? C.white : "transparent", color: mode===m ? C.navy : C.muted, boxShadow: mode===m ? "0 2px 8px rgba(27,58,92,0.1)" : "none", transition:"all 0.2s", fontFamily:"inherit" }}>
@@ -204,7 +311,6 @@ function AuthForm({ onLogin }) {
           ))}
         </div>
 
-        {/* Fields */}
         <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
           {mode === "register" && (
             <div>
@@ -276,6 +382,14 @@ function Dashboard({ session, onLogout }) {
 
   function setP(k, v) { setProfile(p => ({ ...p, [k]: v })); setSaved(false); }
 
+  // Called when a document is uploaded successfully
+  function handleDocUploaded(fieldName, url) {
+    setProfile(p => ({ ...p, [fieldName]: url }));
+    // Save URL to Supabase immediately
+    updateProfile(userId, token, { [fieldName]: url });
+    notificarAdmin({ ...profile, _cambios: [{ campo: fieldName === "foto_perfil_url" ? "Foto de perfil" : fieldName === "foto_titulo_url" ? "Foto de título" : "Matrícula", antes: "—", despues: "Archivo subido" }] });
+  }
+
   async function handleSave() {
     setSaving(true);
     const payload = {
@@ -289,7 +403,6 @@ function Dashboard({ session, onLogout }) {
       disponible: profile.disponible,
     };
 
-    // Detect what changed
     const LABELS = {
       nombre_completo: "Nombre", telefono: "Teléfono",
       especialidad: "Especialidad", zona: "Zona",
@@ -325,6 +438,9 @@ function Dashboard({ session, onLogout }) {
   const completados = servicios.filter(s => s.estado === "completado").length;
   const pendientes  = servicios.filter(s => s.estado === "pendiente").length;
 
+  // Count uploaded docs
+  const docsSubidos = [profile?.foto_perfil_url, profile?.foto_titulo_url, profile?.matricula_url].filter(Boolean).length;
+
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Segoe UI','Helvetica Neue',Arial,sans-serif" }}>
 
@@ -341,9 +457,14 @@ function Dashboard({ session, onLogout }) {
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           {profile && (
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: `linear-gradient(135deg, ${C.teal}, ${C.tealDark})`, display: "flex", alignItems: "center", justifyContent: "center", color: C.white, fontWeight: "800", fontSize: "0.75rem" }}>
-                {(profile.nombre_completo || "?")[0].toUpperCase()}
-              </div>
+              {/* Show profile photo in nav if uploaded */}
+              {profile.foto_perfil_url ? (
+                <img src={profile.foto_perfil_url} alt="perfil" style={{ width: "32px", height: "32px", borderRadius: "50%", objectFit: "cover", border: `2px solid ${C.teal}` }} />
+              ) : (
+                <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: `linear-gradient(135deg, ${C.teal}, ${C.tealDark})`, display: "flex", alignItems: "center", justifyContent: "center", color: C.white, fontWeight: "800", fontSize: "0.75rem" }}>
+                  {(profile.nombre_completo || "?")[0].toUpperCase()}
+                </div>
+              )}
               <span style={{ color: "rgba(255,255,255,0.75)", fontSize: "0.82rem" }}>{(profile.nombre_completo || "").split(" ")[0]}</span>
             </div>
           )}
@@ -367,7 +488,7 @@ function Dashboard({ session, onLogout }) {
               {[
                 { label: "Servicios completados", value: completados, icon: "✅", color: "#1A7A50", bg: "#E6F7F1" },
                 { label: "Solicitudes pendientes", value: pendientes,  icon: "⏳", color: "#B7791F", bg: "#FEF3C7" },
-                { label: "Estado actual",  value: profile?.disponible ? "Disponible" : "No disponible", icon: profile?.disponible ? "🟢" : "🔴", color: profile?.disponible ? "#1A7A50" : C.red, bg: profile?.disponible ? "#E6F7F1" : "#FEE8E7" },
+                { label: "Estado actual", value: profile?.disponible ? "Disponible" : "No disponible", icon: profile?.disponible ? "🟢" : "🔴", color: profile?.disponible ? "#1A7A50" : C.red, bg: profile?.disponible ? "#E6F7F1" : "#FEE8E7" },
               ].map(({ label, value, icon, color, bg }) => (
                 <div key={label} style={{ background: C.white, borderRadius: "12px", padding: "1.25rem", border: `1px solid ${C.border}`, boxShadow: "0 2px 8px rgba(27,58,92,0.05)" }}>
                   <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>{icon}</div>
@@ -379,7 +500,12 @@ function Dashboard({ session, onLogout }) {
 
             {/* Tabs */}
             <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", borderBottom: `2px solid ${C.border}` }}>
-              {[["perfil","👤 Mi perfil"],["disponibilidad","📅 Disponibilidad"],["servicios","📋 Mis servicios"]].map(([t,lbl]) => (
+              {[
+                ["perfil","👤 Mi perfil"],
+                ["documentos", `📎 Documentos${docsSubidos > 0 ? ` (${docsSubidos}/3)` : ""}`],
+                ["disponibilidad","📅 Disponibilidad"],
+                ["servicios","📋 Mis servicios"],
+              ].map(([t,lbl]) => (
                 <button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", cursor: "pointer", padding: "0.7rem 1.25rem", fontWeight: "700", fontSize: "0.82rem", color: tab===t ? C.teal : C.muted, borderBottom: tab===t ? `2px solid ${C.teal}` : "2px solid transparent", marginBottom: "-2px", fontFamily: "inherit", transition: "all 0.2s" }}>
                   {lbl}
                 </button>
@@ -449,6 +575,81 @@ function Dashboard({ session, onLogout }) {
                   </button>
                   {saved && <span style={{ color: "#1A7A50", fontWeight: "700", fontSize: "0.85rem" }}>✓ Guardado</span>}
                 </div>
+              </div>
+            )}
+
+            {/* DOCUMENTOS TAB */}
+            {tab === "documentos" && profile && (
+              <div style={{ background: C.white, borderRadius: "16px", padding: "2rem", border: `1px solid ${C.border}`, boxShadow: "0 2px 12px rgba(27,58,92,0.06)" }}>
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <h2 style={{ color: C.navy, fontSize: "1.1rem", fontWeight: "800", marginBottom: "0.4rem" }}>Documentos profesionales</h2>
+                  <p style={{ color: C.muted, fontSize: "0.82rem", lineHeight: 1.5 }}>
+                    Subí tus documentos para que CuidaMed pueda verificar tus credenciales. Todos los campos son opcionales pero aceleran tu verificación. Aceptamos imágenes (JPG, PNG) o PDF.
+                  </p>
+                </div>
+
+                {/* Progress bar */}
+                <div style={{ background: C.bg, borderRadius: "10px", padding: "1rem", marginBottom: "1.5rem", display: "flex", alignItems: "center", gap: "1rem" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.4rem" }}>
+                      <span style={{ fontSize: "0.75rem", fontWeight: "700", color: C.navy }}>Documentos subidos</span>
+                      <span style={{ fontSize: "0.75rem", fontWeight: "800", color: docsSubidos === 3 ? "#1A7A50" : C.teal }}>{docsSubidos}/3</span>
+                    </div>
+                    <div style={{ height: "6px", background: C.border, borderRadius: "100px", overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${(docsSubidos / 3) * 100}%`, background: docsSubidos === 3 ? "#25A56A" : `linear-gradient(90deg, ${C.teal}, ${C.tealDark})`, borderRadius: "100px", transition: "width 0.4s ease" }} />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: "1.5rem" }}>{docsSubidos === 3 ? "🎉" : "📎"}</div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem" }}>
+                  <DocUploadCard
+                    label="Foto de perfil"
+                    icon="🤳"
+                    fieldName="foto_perfil_url"
+                    currentUrl={profile.foto_perfil_url}
+                    accept="image/jpeg,image/png,image/webp"
+                    userId={userId}
+                    token={token}
+                    onUploaded={handleDocUploaded}
+                  />
+                  <DocUploadCard
+                    label="Título profesional"
+                    icon="🎓"
+                    fieldName="foto_titulo_url"
+                    currentUrl={profile.foto_titulo_url}
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    userId={userId}
+                    token={token}
+                    onUploaded={handleDocUploaded}
+                  />
+                  <DocUploadCard
+                    label="Matrícula profesional"
+                    icon="📋"
+                    fieldName="matricula_url"
+                    currentUrl={profile.matricula_url}
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    userId={userId}
+                    token={token}
+                    onUploaded={handleDocUploaded}
+                  />
+                </div>
+
+                {docsSubidos === 3 && (
+                  <div style={{ background: "#E6F7F1", borderRadius: "10px", padding: "0.9rem 1rem", marginTop: "1.5rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <span style={{ fontSize: "1.25rem" }}>🎉</span>
+                    <div>
+                      <div style={{ fontWeight: "700", color: "#1A7A50", fontSize: "0.85rem" }}>¡Documentación completa!</div>
+                      <div style={{ color: "#1A7A50", fontSize: "0.78rem", marginTop: "2px" }}>CuidaMed revisará tus documentos y te notificará por WhatsApp.</div>
+                    </div>
+                  </div>
+                )}
+
+                {docsSubidos < 3 && (
+                  <div style={{ background: C.accent, borderRadius: "10px", padding: "0.9rem 1rem", marginTop: "1.5rem", fontSize: "0.82rem", color: C.tealDark, lineHeight: 1.6 }}>
+                    💡 <strong>Tip:</strong> Subir tus documentos acelera significativamente la verificación de tu perfil. Podés subir fotos tomadas con el celular.
+                  </div>
+                )}
               </div>
             )}
 
